@@ -62,20 +62,20 @@ export class ProductsService {
     await this.productsRepository.remove(product);
   }
 
+// Define constant at class level
+  private readonly CACHE_TTL_MS = 60000; // 60 seconds
+
   async searchProducts(query: string): Promise<Product[]> {
-    const cacheKey = 'product-search';
-    const cached = await this.cacheManager.get<Product[]>(cacheKey);
-    if (cached) {
-      return cached;
-    }
+    const normalizedQuery = query.toLowerCase().trim();
 
-    const products = await this.productsRepository.find();
-    const results = products.filter(p => 
-      p.name.toLowerCase().includes(query.toLowerCase()) ||
-      (p.description || '').toLowerCase().includes(query.toLowerCase())
-    );
+    // Query directly in database - efficient filtering at DB level
+    const results = await this.productsRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.category', 'category')
+      .where('LOWER(product.name) LIKE :query', { query: `%${normalizedQuery}%` })
+      .orWhere('LOWER(product.description) LIKE :query', { query: `%${normalizedQuery}%` })
+      .getMany();
 
-    await this.cacheManager.set(cacheKey, results, 60000);
     return results;
   }
 

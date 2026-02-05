@@ -1,6 +1,17 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Param,
+  Query,
+  ParseIntPipe,
+  UseInterceptors,
+} from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto, CreateCategoryDto } from './dto/create-product.dto';
+import { CacheInterceptor } from '@nestjs/cache-manager';
 
 @Controller('products')
 export class ProductsController {
@@ -12,6 +23,7 @@ export class ProductsController {
   }
 
   @Get('search')
+  @UseInterceptors(CacheInterceptor)
   search(@Query('q') query: string) {
     return this.productsService.searchProducts(query || '');
   }
