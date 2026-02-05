@@ -44,6 +44,19 @@ export class ProductsService {
     return this.productsRepository.save(product);
   }
 
+  async decrementStock(id: number, quantity: number): Promise<void> {
+    const result = await this.productsRepository
+      .createQueryBuilder()
+      .update(Product)
+      .set({ stock: () => `stock - ${quantity}` })
+      .where('id = :id AND stock >= :quantity', { id, quantity })
+      .execute();
+
+    if (result.affected === 0) {
+      throw new BadRequestException('Not enough stock available');
+    }
+  }
+
   async remove(id: number): Promise<void> {
     const product = await this.findOne(id);
     await this.productsRepository.remove(product);
