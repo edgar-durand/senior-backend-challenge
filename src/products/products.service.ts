@@ -62,9 +62,6 @@ export class ProductsService {
     await this.productsRepository.remove(product);
   }
 
-// Define constant at class level
-  private readonly CACHE_TTL_MS = 60000; // 60 seconds
-
   async searchProducts(query: string): Promise<Product[]> {
     const normalizedQuery = query.toLowerCase().trim();
 
