@@ -23,7 +23,7 @@ export class ProductsService {
   }
 
   async findOne(id: number): Promise<Product> {
-    const product = await this.productsRepository.findOne({ 
+    const product = await this.productsRepository.findOne({
       where: { id },
       relations: ['category'],
     });
@@ -69,15 +69,21 @@ export class ProductsService {
     const results = await this.productsRepository
       .createQueryBuilder('product')
       .leftJoinAndSelect('product.category', 'category')
-      .where('LOWER(product.name) LIKE :query', { query: `%${normalizedQuery}%` })
-      .orWhere('LOWER(product.description) LIKE :query', { query: `%${normalizedQuery}%` })
+      .where('LOWER(product.name) LIKE :query', {
+        query: `%${normalizedQuery}%`,
+      })
+      .orWhere('LOWER(product.description) LIKE :query', {
+        query: `%${normalizedQuery}%`,
+      })
       .getMany();
 
     return results;
   }
 
   async findAllCategories(): Promise<Category[]> {
-    return this.categoriesRepository.find({ relations: ['parent', 'children'] });
+    return this.categoriesRepository.find({
+      relations: ['parent', 'children'],
+    });
   }
 
   async findCategory(id: number): Promise<Category> {
@@ -113,30 +119,55 @@ export class ProductsService {
     }
 
     if (category.children && category.children.length > 0) {
-      tree.children = category.children.map(child => this.buildCategoryTree(child));
+      tree.children = category.children.map((child) =>
+        this.buildCategoryTree(child),
+      );
     }
 
     return tree;
   }
 
-  async processProductBatch(productIds: number[]): Promise<{ success: boolean; processed: number }> {
-    let processed = 0;
-    
-    try {
-      for (const id of productIds) {
-        try {
-          const product = await this.findOne(id);
-          product.updatedAt = new Date();
-          await this.productsRepository.save(product);
-          processed++;
-        } catch (error) {
-          console.log('Error processing product');
-        }
-      }
-    } catch (error) {
-      throw new BadRequestException('Batch processing failed');
+  async processProductBatch(
+    productIds: number[],
+  ): Promise<BatchProcessingResult> {
+    if (productIds.length === 0) {
+      return { success: true, processed: 0, failed: 0, errors: [] };
     }
 
-    return { success: true, processed };
+    const errors: BatchProductError[] = [];
+
+    // Validate all product IDs exist first
+    const existingProducts = await this.productsRepository
+      .createQueryBuilder('product')
+      .where('product.id IN (:...ids)', { ids: productIds })
+      .getMany();
+
+    const existingIds = new Set(existingProducts.map((p) => p.id));
+    const missingIds = productIds.filter((id) => !existingIds.has(id));
+
+    // Track missing products as errors
+    for (const id of missingIds) {
+      errors.push({ productId: id, error: `Product #${id} not found` });
+    }
+
+    // Bulk update all existing products in a single query
+    let processed = 0;
+    if (existingIds.size > 0) {
+      const result = await this.productsRepository
+        .createQueryBuilder()
+        .update()
+        .set({ updatedAt: new Date() })
+        .where('id IN (:...ids)', { ids: [...existingIds] })
+        .execute();
+
+      processed = result.affected ?? 0;
+    }
+
+    return {
+      success: errors.length === 0,
+      processed,
+      failed: errors.length,
+      errors,
+    };
   }
 }
